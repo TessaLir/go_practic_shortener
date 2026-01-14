@@ -1,9 +1,11 @@
 package main
 
 import (
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -69,15 +71,21 @@ func mainPage(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Получаем URL из данных формы
-	urlStr := req.FormValue("URL")
+	// Читаем тело запроса
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(res, "Ошибка чтения тела запроса", http.StatusBadRequest)
+		return
+	}
+	defer req.Body.Close()
+
+	// Получаем URL из тела запроса
+	urlStr := strings.TrimSpace(string(body))
 
 	// Выполняем проверку полученного URL на пустую строку и является ли данный URL валидным
 	switch {
 	case urlStr == "":
-		res.WriteHeader(http.StatusBadRequest)
-		res.Write([]byte(`Невозможно распарсить полученный сокращенный URL - URL не может быть пустым`))
-		// http.Error(res, "Невозможно распарсить полученный сокращенный URL - URL не может быть пустым", http.StatusBadRequest)
+		http.Error(res, "Невозможно распарсить полученный сокращенный URL - URL не может быть пустым", http.StatusBadRequest)
 		return
 	case !isValidURL(urlStr):
 		http.Error(res, "передан не валидный URL", http.StatusBadRequest)
