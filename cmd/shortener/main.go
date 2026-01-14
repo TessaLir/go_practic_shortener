@@ -75,7 +75,7 @@ func mainPage(res http.ResponseWriter, req *http.Request) {
 	// Выполняем проверку полученного URL на пустую строку и является ли данный URL валидным
 	switch {
 	case urlStr == "":
-		http.Error(res, "URL не может быть пустым", http.StatusBadRequest)
+		http.Error(res, "Невозможно распарсить полученный сокращенный URL - URL не может быть пустым", http.StatusBadRequest)
 		return
 	case !isValidURL(urlStr):
 		http.Error(res, "передан не валидный URL", http.StatusBadRequest)
