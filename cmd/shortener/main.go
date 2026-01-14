@@ -12,10 +12,9 @@ import (
 var urlStore = make(map[string]string)
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-var HOST = "localhost"
-var PORT = "8080"
-var URL = "http://" + HOST + ":" + PORT
-var URL_DETAIL = URL + "/{id}"
+var host = "localhost"
+var port = "8080"
+var siteUrl = "http://" + host + ":" + port
 
 // Проверка переданного URL на валидность.
 func isValidURL(str string) bool {
@@ -101,7 +100,7 @@ func mainPage(res http.ResponseWriter, req *http.Request) {
 	// Записываем заголовки, присваиваем статус и отдаем ответ сервера
 	res.Header().Set("Content-Type", "text/plain")
 	res.WriteHeader(http.StatusCreated)
-	res.Write([]byte(URL + "/" + hashString))
+	res.Write([]byte(siteUrl + "/" + hashString))
 
 }
 
@@ -132,7 +131,7 @@ func main() {
 	mux.HandleFunc(`/`, mainPage)
 	mux.HandleFunc(`/{id}`, urlDetailPage)
 
-	err := http.ListenAndServe(":"+PORT, mux)
+	err := http.ListenAndServe(":"+port, mux)
 	if err != nil {
 		panic(err)
 	}
