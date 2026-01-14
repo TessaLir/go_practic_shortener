@@ -20,7 +20,7 @@ var siteURL = "http://" + host + ":" + port
 func isValidURL(str string) bool {
 
 	// смотрим URL
-	parsedUrl, err := url.Parse(str)
+	parsedURL, err := url.Parse(str)
 
 	// Если что возвращаем false
 	if err != nil {
@@ -28,7 +28,7 @@ func isValidURL(str string) bool {
 	}
 
 	// возвращаем результат окончательной проверки URl
-	return parsedUrl.Scheme != "" && parsedUrl.Host != ""
+	return parsedURL.Scheme != "" && parsedURL.Host != ""
 
 }
 
