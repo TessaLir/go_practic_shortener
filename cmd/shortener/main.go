@@ -14,13 +14,13 @@ var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 var host = "localhost"
 var port = "8080"
-var siteUrl = "http://" + host + ":" + port
+var siteURL = "http://" + host + ":" + port
 
 // Проверка переданного URL на валидность.
 func isValidURL(str string) bool {
 
 	// смотрим URL
-	parsedURL, err := url.Parse(str)
+	parsedUrl, err := url.Parse(str)
 
 	// Если что возвращаем false
 	if err != nil {
@@ -28,7 +28,7 @@ func isValidURL(str string) bool {
 	}
 
 	// возвращаем результат окончательной проверки URl
-	return parsedURL.Scheme != "" && parsedURL.Host != ""
+	return parsedUrl.Scheme != "" && parsedUrl.Host != ""
 
 }
 
@@ -100,7 +100,7 @@ func mainPage(res http.ResponseWriter, req *http.Request) {
 	// Записываем заголовки, присваиваем статус и отдаем ответ сервера
 	res.Header().Set("Content-Type", "text/plain")
 	res.WriteHeader(http.StatusCreated)
-	res.Write([]byte(siteUrl + "/" + hashString))
+	res.Write([]byte(siteURL + "/" + hashString))
 
 }
 
