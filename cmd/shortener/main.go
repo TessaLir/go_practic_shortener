@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 var urlStore = make(map[string]string)
@@ -108,7 +110,11 @@ func mainPage(res http.ResponseWriter, req *http.Request) {
 func urlDetailPage(res http.ResponseWriter, req *http.Request) {
 
 	// Получаем хеш из параметра
-	id := req.URL.Path[1:]
+	id := chi.URLParam(req, "id")
+	// Fallback для тестов, где роутер не обрабатывает запрос
+	if id == "" {
+		id = req.URL.Path[1:]
+	}
 
 	// Смотрим нашу БД (импровизированную), если ничего не находим, возвращаем ошибку
 	urlStr, found := urlStore[id]
@@ -123,15 +129,22 @@ func urlDetailPage(res http.ResponseWriter, req *http.Request) {
 
 }
 
+// Настройка и возврат роутера с зарегистрированными маршрутами
+func setupRouter() *chi.Mux {
+	r := chi.NewRouter()
+
+	r.Post(`/`, mainPage)
+	r.Get(`/{id}`, urlDetailPage)
+
+	return r
+}
+
 // Точка входа
 func main() {
 
-	mux := http.NewServeMux()
+	r := setupRouter()
 
-	mux.HandleFunc(`/`, mainPage)
-	mux.HandleFunc(`/{id}`, urlDetailPage)
-
-	err := http.ListenAndServe(":"+port, mux)
+	err := http.ListenAndServe(":"+port, r)
 	if err != nil {
 		panic(err)
 	}
