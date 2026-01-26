@@ -232,7 +232,7 @@ func TestCreateAndRetrieveURL(t *testing.T) {
 
 	// Извлекаем hash из ответа
 	responseBody := w1.Body.String()
-	hash := strings.TrimPrefix(responseBody, cfg.BaseURL+"/")
+	hash := strings.TrimPrefix(responseBody, cfg.BaseURL+cfg.ServerPort+"/")
 	if len(hash) != 8 {
 		t.Fatalf("Ожидался hash длиной 8 символов, получено %d", len(hash))
 	}
