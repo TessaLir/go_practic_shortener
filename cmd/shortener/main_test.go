@@ -5,11 +5,21 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/TessaLir/go_practic_shortener/cmd/shortener/config"
 )
 
 // Очистка хранилища перед каждым тестом
 func setupTest() {
 	urlStore = make(map[string]string)
+}
+
+// Создание тестовой конфигурации
+func setupTestConfig() *config.Config {
+	return &config.Config{
+		ServerPort: ":8080",
+		BaseURL:    "http://localhost",
+	}
 }
 
 // Тесты для mainPage (POST /)
@@ -27,7 +37,7 @@ func TestMainPage(t *testing.T) {
 			method:         http.MethodPost,
 			body:           "https://example.com",
 			expectedStatus: http.StatusCreated,
-			expectedBody:   siteURL + "/",
+			expectedBody:   "http://localhost:8080/",
 			checkStore:     true,
 		},
 		{
@@ -59,7 +69,7 @@ func TestMainPage(t *testing.T) {
 			method:         http.MethodPost,
 			body:           "  https://example.com  ",
 			expectedStatus: http.StatusCreated,
-			expectedBody:   siteURL + "/",
+			expectedBody:   "http://localhost:8080/",
 			checkStore:     true,
 		},
 		{
@@ -75,11 +85,12 @@ func TestMainPage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			setupTest()
+			cfg := setupTestConfig()
 
 			req := httptest.NewRequest(tt.method, "/", strings.NewReader(tt.body))
 			w := httptest.NewRecorder()
 
-			mainPage(w, req)
+			mainPage(cfg)(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Ожидался статус %d, получен %d", tt.expectedStatus, w.Code)
@@ -130,44 +141,44 @@ func TestMainPage(t *testing.T) {
 // Тесты для urlDetailPage (GET /{id})
 func TestUrlDetailPage(t *testing.T) {
 	tests := []struct {
-		name           string
-		path           string
-		setupStore     map[string]string
-		expectedStatus int
+		name             string
+		path             string
+		setupStore       map[string]string
+		expectedStatus   int
 		expectedLocation string
-		expectedBody   string
+		expectedBody     string
 	}{
 		{
-			name:           "GET с существующим ID",
-			path:           "/abc12345",
-			setupStore:     map[string]string{"abc12345": "https://example.com"},
-			expectedStatus: http.StatusTemporaryRedirect,
+			name:             "GET с существующим ID",
+			path:             "/abc12345",
+			setupStore:       map[string]string{"abc12345": "https://example.com"},
+			expectedStatus:   http.StatusTemporaryRedirect,
 			expectedLocation: "https://example.com",
-			expectedBody:   "",
+			expectedBody:     "",
 		},
 		{
-			name:           "GET с несуществующим ID",
-			path:           "/nonexistent",
-			setupStore:     map[string]string{},
-			expectedStatus: http.StatusBadRequest,
+			name:             "GET с несуществующим ID",
+			path:             "/nonexistent",
+			setupStore:       map[string]string{},
+			expectedStatus:   http.StatusBadRequest,
 			expectedLocation: "",
-			expectedBody:   "Сайт не найден",
+			expectedBody:     "Сайт не найден",
 		},
 		{
-			name:           "GET с пустым ID",
-			path:           "/",
-			setupStore:     map[string]string{},
-			expectedStatus: http.StatusBadRequest,
+			name:             "GET с пустым ID",
+			path:             "/",
+			setupStore:       map[string]string{},
+			expectedStatus:   http.StatusBadRequest,
 			expectedLocation: "",
-			expectedBody:   "Сайт не найден",
+			expectedBody:     "Сайт не найден",
 		},
 		{
-			name:           "GET с другим существующим ID",
-			path:           "/xyz98765",
-			setupStore:     map[string]string{"xyz98765": "https://google.com"},
-			expectedStatus: http.StatusTemporaryRedirect,
+			name:             "GET с другим существующим ID",
+			path:             "/xyz98765",
+			setupStore:       map[string]string{"xyz98765": "https://google.com"},
+			expectedStatus:   http.StatusTemporaryRedirect,
 			expectedLocation: "https://google.com",
-			expectedBody:   "",
+			expectedBody:     "",
 		},
 	}
 
@@ -208,11 +219,12 @@ func TestUrlDetailPage(t *testing.T) {
 // Интеграционный тест: создание URL и последующее получение
 func TestCreateAndRetrieveURL(t *testing.T) {
 	setupTest()
+	cfg := setupTestConfig()
 
 	// Создаем короткую ссылку
 	req1 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://test.com"))
 	w1 := httptest.NewRecorder()
-	mainPage(w1, req1)
+	mainPage(cfg)(w1, req1)
 
 	if w1.Code != http.StatusCreated {
 		t.Fatalf("Ожидался статус %d при создании, получен %d", http.StatusCreated, w1.Code)
@@ -220,7 +232,7 @@ func TestCreateAndRetrieveURL(t *testing.T) {
 
 	// Извлекаем hash из ответа
 	responseBody := w1.Body.String()
-	hash := strings.TrimPrefix(responseBody, siteURL+"/")
+	hash := strings.TrimPrefix(responseBody, cfg.BaseURL+"/")
 	if len(hash) != 8 {
 		t.Fatalf("Ожидался hash длиной 8 символов, получено %d", len(hash))
 	}

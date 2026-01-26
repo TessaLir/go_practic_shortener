@@ -9,14 +9,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/TessaLir/go_practic_shortener/cmd/shortener/config"
 )
 
 var urlStore = make(map[string]string)
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-var host = "localhost"
-var port = "8080"
-var siteURL = "http://" + host + ":" + port
 
 // Проверка переданного URL на валидность.
 func isValidURL(str string) bool {
@@ -64,46 +62,48 @@ func generateShortURL() string {
 }
 
 // Метод обработки запросов для главной страницы с POST методом.
-func mainPage(res http.ResponseWriter, req *http.Request) {
+func mainPage(cfg *config.Config) http.HandlerFunc {
+	return func(res http.ResponseWriter, req *http.Request) {
 
-	// Проверка метода, пропускаем только POST
-	if req.Method != http.MethodPost {
-		http.Error(res, "Данный запрос не поддерживает выбранный метод.", http.StatusBadRequest)
-		return
+		// Проверка метода, пропускаем только POST
+		if req.Method != http.MethodPost {
+			http.Error(res, "Данный запрос не поддерживает выбранный метод.", http.StatusBadRequest)
+			return
+		}
+
+		// Читаем тело запроса
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(res, "Ошибка чтения тела запроса", http.StatusBadRequest)
+			return
+		}
+		defer req.Body.Close()
+
+		// Получаем URL из тела запроса
+		urlStr := strings.TrimSpace(string(body))
+
+		// Выполняем проверку полученного URL на пустую строку и является ли данный URL валидным
+		switch {
+		case urlStr == "":
+			http.Error(res, "Невозможно распарсить полученный сокращенный URL - URL не может быть пустым", http.StatusBadRequest)
+			return
+		case !isValidURL(urlStr):
+			http.Error(res, "передан не валидный URL", http.StatusBadRequest)
+			return
+		}
+
+		// Получаем уникальный хещ
+		hashString := generateShortURL()
+
+		// Записываем ключ - значение в БД (импровизированную)
+		urlStore[hashString] = urlStr
+
+		// Записываем заголовки, присваиваем статус и отдаем ответ сервера
+		res.Header().Set("Content-Type", "text/plain")
+		res.WriteHeader(http.StatusCreated)
+		res.Write([]byte(cfg.BaseURL + cfg.ServerPort + "/" + hashString))
+
 	}
-
-	// Читаем тело запроса
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		http.Error(res, "Ошибка чтения тела запроса", http.StatusBadRequest)
-		return
-	}
-	defer req.Body.Close()
-
-	// Получаем URL из тела запроса
-	urlStr := strings.TrimSpace(string(body))
-
-	// Выполняем проверку полученного URL на пустую строку и является ли данный URL валидным
-	switch {
-	case urlStr == "":
-		http.Error(res, "Невозможно распарсить полученный сокращенный URL - URL не может быть пустым", http.StatusBadRequest)
-		return
-	case !isValidURL(urlStr):
-		http.Error(res, "передан не валидный URL", http.StatusBadRequest)
-		return
-	}
-
-	// Получаем уникальный хещ
-	hashString := generateShortURL()
-
-	// Записываем ключ - значение в БД (импровизированную)
-	urlStore[hashString] = urlStr
-
-	// Записываем заголовки, присваиваем статус и отдаем ответ сервера
-	res.Header().Set("Content-Type", "text/plain")
-	res.WriteHeader(http.StatusCreated)
-	res.Write([]byte(siteURL + "/" + hashString))
-
 }
 
 // Метод обработки запроса получения URL и редиректа на сайт по короткой ссылке.
@@ -130,10 +130,10 @@ func urlDetailPage(res http.ResponseWriter, req *http.Request) {
 }
 
 // Настройка и возврат роутера с зарегистрированными маршрутами
-func setupRouter() *chi.Mux {
+func setupRouter(cfg *config.Config) *chi.Mux {
 	r := chi.NewRouter()
 
-	r.Post(`/`, mainPage)
+	r.Post(`/`, mainPage(cfg))
 	r.Get(`/{id}`, urlDetailPage)
 
 	return r
@@ -142,9 +142,12 @@ func setupRouter() *chi.Mux {
 // Точка входа
 func main() {
 
-	r := setupRouter()
+	// Инициализируем конфигурацию из аргументов командной строки
+	cfg := config.Init()
 
-	err := http.ListenAndServe(":"+port, r)
+	r := setupRouter(cfg)
+
+	err := http.ListenAndServe(cfg.ServerPort, r)
 	if err != nil {
 		panic(err)
 	}
