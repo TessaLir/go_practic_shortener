@@ -78,7 +78,7 @@ func (h *ShortenerHandler) URLDetailPage() http.HandlerFunc {
 		// Смотрим нашу БД, если ничего не находим, возвращаем ошибку
 		urlStr, found := h.service.GetURL(id)
 		if !found {
-			http.Error(res, "Сайт не найден", http.StatusBadRequest)
+			http.Error(res, "Сайт не найден", http.StatusNotFound)
 			return
 		}
 
