@@ -2,19 +2,15 @@ package main
 
 import (
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/TessaLir/go_practic_shortener/cmd/shortener/config"
+	"github.com/TessaLir/go_practic_shortener/internal/repository"
 )
-
-var urlStore = make(map[string]string)
-var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // Проверка переданного URL на валидность.
 func isValidURL(str string) bool {
@@ -33,7 +29,7 @@ func isValidURL(str string) bool {
 }
 
 // Генерация рандомной короткой строки длиной в 8 символов
-func generateShortURL() string {
+func generateShortURL(storage *repository.Storage) string {
 
 	// Некоторые константы, которые в теории можно вынести в глобальные, но не будем этого делать
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -41,6 +37,8 @@ func generateShortURL() string {
 
 	// Создаем массив байтов и записываем туда символы из паттерна
 	result := make([]byte, length)
+
+	rng := storage.GetRNG()
 
 	// цикл
 	for {
@@ -51,7 +49,7 @@ func generateShortURL() string {
 		}
 
 		// Если сгенерированная строка - уникальна, выходим из цикла
-		if _, exists := urlStore[string(result)]; !exists {
+		if !storage.Exists(string(result)) {
 			break
 		}
 	}
@@ -62,7 +60,7 @@ func generateShortURL() string {
 }
 
 // Метод обработки запросов для главной страницы с POST методом.
-func mainPage(cfg *config.Config) http.HandlerFunc {
+func mainPage(cfg *config.Config, storage *repository.Storage) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
 
 		// Проверка метода, пропускаем только POST
@@ -93,10 +91,10 @@ func mainPage(cfg *config.Config) http.HandlerFunc {
 		}
 
 		// Получаем уникальный хещ
-		hashString := generateShortURL()
+		hashString := generateShortURL(storage)
 
 		// Записываем ключ - значение в БД (импровизированную)
-		urlStore[hashString] = urlStr
+		storage.Save(hashString, urlStr)
 
 		// Записываем заголовки, присваиваем статус и отдаем ответ сервера
 		res.Header().Set("Content-Type", "text/plain")
@@ -107,34 +105,36 @@ func mainPage(cfg *config.Config) http.HandlerFunc {
 }
 
 // Метод обработки запроса получения URL и редиректа на сайт по короткой ссылке.
-func urlDetailPage(res http.ResponseWriter, req *http.Request) {
+func urlDetailPage(storage *repository.Storage) http.HandlerFunc {
+	return func(res http.ResponseWriter, req *http.Request) {
 
-	// Получаем хеш из параметра
-	id := chi.URLParam(req, "id")
-	// Fallback для тестов, где роутер не обрабатывает запрос
-	if id == "" {
-		id = req.URL.Path[1:]
+		// Получаем хеш из параметра
+		id := chi.URLParam(req, "id")
+		// Fallback для тестов, где роутер не обрабатывает запрос
+		if id == "" {
+			id = req.URL.Path[1:]
+		}
+
+		// Смотрим нашу БД (импровизированную), если ничего не находим, возвращаем ошибку
+		urlStr, found := storage.Get(id)
+		if !found {
+			http.Error(res, "Сайт не найден", http.StatusBadRequest)
+			return
+		}
+
+		// Если все ОК, задаем заголовок и делаем редирект
+		res.Header().Set("Location", urlStr)
+		res.WriteHeader(http.StatusTemporaryRedirect)
+
 	}
-
-	// Смотрим нашу БД (импровизированную), если ничего не находим, возвращаем ошибку
-	urlStr, found := urlStore[id]
-	if !found {
-		http.Error(res, "Сайт не найден", http.StatusBadRequest)
-		return
-	}
-
-	// Если все ОК, задаем заголовок и делаем редирект
-	res.Header().Set("Location", urlStr)
-	res.WriteHeader(http.StatusTemporaryRedirect)
-
 }
 
 // Настройка и возврат роутера с зарегистрированными маршрутами
-func setupRouter(cfg *config.Config) *chi.Mux {
+func setupRouter(cfg *config.Config, storage *repository.Storage) *chi.Mux {
 	r := chi.NewRouter()
 
-	r.Post(`/`, mainPage(cfg))
-	r.Get(`/{id}`, urlDetailPage)
+	r.Post(`/`, mainPage(cfg, storage))
+	r.Get(`/{id}`, urlDetailPage(storage))
 
 	return r
 }
@@ -145,7 +145,10 @@ func main() {
 	// Инициализируем конфигурацию из аргументов командной строки
 	cfg := config.Init()
 
-	r := setupRouter(cfg)
+	// Создаем хранилище
+	storage := repository.NewStorage()
+
+	r := setupRouter(cfg, storage)
 
 	err := http.ListenAndServe(cfg.ServerPort, r)
 	if err != nil {
