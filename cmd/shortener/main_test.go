@@ -7,13 +7,10 @@ import (
 	"testing"
 
 	"github.com/TessaLir/go_practic_shortener/cmd/shortener/config"
+	"github.com/TessaLir/go_practic_shortener/internal/handler"
 	"github.com/TessaLir/go_practic_shortener/internal/repository"
+	"github.com/TessaLir/go_practic_shortener/internal/service"
 )
-
-// Создание нового хранилища для каждого теста
-func setupTest() *repository.Storage {
-	return repository.NewStorage()
-}
 
 // Создание тестовой конфигурации
 func setupTestConfig() *config.Config {
@@ -21,6 +18,15 @@ func setupTestConfig() *config.Config {
 		ServerPort: ":8080",
 		BaseURL:    "http://localhost",
 	}
+}
+
+// Создание тестовых компонентов
+func setupTestComponents() (*handler.ShortenerHandler, *repository.Storage) {
+	cfg := setupTestConfig()
+	storage := repository.NewStorage()
+	shortenerService := service.NewShortenerService(storage)
+	shortenerHandler := handler.NewShortenerHandler(shortenerService, cfg)
+	return shortenerHandler, storage
 }
 
 // Тесты для mainPage (POST /)
@@ -85,13 +91,13 @@ func TestMainPage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage := setupTest()
-			cfg := setupTestConfig()
+			handler, storage := setupTestComponents()
+			storage.Clear()
 
 			req := httptest.NewRequest(tt.method, "/", strings.NewReader(tt.body))
 			w := httptest.NewRecorder()
 
-			mainPage(cfg, storage)(w, req)
+			handler.MainPage()(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Ожидался статус %d, получен %d", tt.expectedStatus, w.Code)
@@ -184,7 +190,9 @@ func TestUrlDetailPage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage := setupTest()
+			handler, storage := setupTestComponents()
+			storage.Clear()
+
 			// Заполняем хранилище для теста
 			for k, v := range tt.setupStore {
 				storage.Save(k, v)
@@ -193,7 +201,7 @@ func TestUrlDetailPage(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			w := httptest.NewRecorder()
 
-			urlDetailPage(storage)(w, req)
+			handler.URLDetailPage()(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Ожидался статус %d, получен %d", tt.expectedStatus, w.Code)
@@ -218,13 +226,14 @@ func TestUrlDetailPage(t *testing.T) {
 
 // Интеграционный тест: создание URL и последующее получение
 func TestCreateAndRetrieveURL(t *testing.T) {
-	storage := setupTest()
+	handler, storage := setupTestComponents()
+	storage.Clear()
 	cfg := setupTestConfig()
 
 	// Создаем короткую ссылку
 	req1 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://test.com"))
 	w1 := httptest.NewRecorder()
-	mainPage(cfg, storage)(w1, req1)
+	handler.MainPage()(w1, req1)
 
 	if w1.Code != http.StatusCreated {
 		t.Fatalf("Ожидался статус %d при создании, получен %d", http.StatusCreated, w1.Code)
@@ -240,7 +249,7 @@ func TestCreateAndRetrieveURL(t *testing.T) {
 	// Получаем URL по hash
 	req2 := httptest.NewRequest(http.MethodGet, "/"+hash, nil)
 	w2 := httptest.NewRecorder()
-	urlDetailPage(storage)(w2, req2)
+	handler.URLDetailPage()(w2, req2)
 
 	if w2.Code != http.StatusTemporaryRedirect {
 		t.Errorf("Ожидался статус %d при получении, получен %d", http.StatusTemporaryRedirect, w2.Code)
